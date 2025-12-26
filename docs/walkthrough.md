@@ -48,6 +48,19 @@
 - **Model Re-import Time**: 39.92 ms
 - **Model Mutation Time**: 1.43 ms (Spike AP -> Trigger Auto-Draw)
 
+### 5. Full Stack Web Application
+**Architecture**: NestJS (Backend) + React/Tailwind (Frontend)
+- **Backend**: `backend/` (Runs on port 3000). Exposes HyperFormula Engine via API.
+- **Frontend**: `frontend/` (Runs on port 5173). Interactive Grid with Formula Editor and View Tabs.
+- **Views Implemented**: Master, Products & Revenue, Cash Flow, Balance Sheet.
+
+**How to Run**:
+1. Open Terminal:
+   ```bash
+   npm run dev
+   ```
+2. Open Browser: [http://localhost:5173](http://localhost:5173)
+
 ### 3. Serialization Roundtrip
 **Test**: `tests/performance.test.ts`
 **Method**: `getAllSheetsValues` -> `setSheetContent`

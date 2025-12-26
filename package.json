@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "dev": "concurrently --kill-others -n \"BACKEND,FRONTEND\" -c \"blue,magenta\" \"npm run start:dev --prefix backend\" \"npm run dev --prefix frontend\"",
     "test": "jest --verbose",
     "perf": "ts-node src/index.ts",
     "perf-weekly": "ts-node src/indexWeekly.ts",
@@ -20,7 +21,11 @@
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "^25.0.3",
+    "autoprefixer": "^10.4.23",
+    "concurrently": "^9.2.1",
     "jest": "^30.2.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.18",
     "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
