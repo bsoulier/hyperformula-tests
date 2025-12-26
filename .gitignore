@@ -1,0 +1,20 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build output
+dist/
+build/
+
+# Reports and temporary output
+final_report.txt
+weekly_report.txt
+perf_report.txt
+test_output.txt
+test_output_2.txt
+
+# System
+.DS_Store
+Thumbs.db
