@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DataGrid } from './DataGrid';
+import { FormulaModal } from './FormulaModal';
 
 function App() {
   const [data, setData] = useState<any[][]>([]);
@@ -7,12 +8,10 @@ function App() {
   const [selectedCell, setSelectedCell] = useState<{ col: number, row: number, val: any } | null>(null);
   const [formula, setFormula] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'products' | 'cash' | 'bs'>('all');
+  const [editingCell, setEditingCell] = useState<{ col: number, row: number, val: string } | null>(null);
+  const [availableNames, setAvailableNames] = useState<string[]>([]);
 
   const API_URL = 'http://localhost:3000/api';
-
-  useEffect(() => {
-    fetchData();
-  }, []);
 
   const fetchData = async () => {
     setLoading(true);
@@ -20,6 +19,10 @@ function App() {
       const res = await fetch(`${API_URL}/model`);
       const json = await res.json();
       setData(json);
+
+      const namesRes = await fetch(`${API_URL}/model/names`);
+      const namesJson = await namesRes.json();
+      setAvailableNames(namesJson);
     } catch (e) {
       console.error(e);
     } finally {
@@ -27,45 +30,52 @@ function App() {
     }
   };
 
+  useEffect(() => {
+    fetchData();
+  }, []);
+
   const handleCellClick = async (col: number, row: number, val: any) => {
     setSelectedCell({ col, row, val });
-    // Fetch formula
     try {
       const res = await fetch(`${API_URL}/formula?col=${col}&row=${row}`);
       const json = await res.json();
-      setFormula(json.formula || val); // If no formula, show val
+      setFormula(json.formula || val);
     } catch (e) {
       setFormula(val);
+    }
+  };
+
+  const handleCellDoubleClick = async (col: number, row: number, val: any) => {
+    try {
+      const res = await fetch(`${API_URL}/formula?col=${col}&row=${row}`);
+      const json = await res.json();
+      setEditingCell({ col, row, val: json.formula || val });
+    } catch (e) {
+      setEditingCell({ col, row, val });
     }
   };
 
   const handleFormulaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCell) return;
+    submitEdit(selectedCell.col, selectedCell.row, formula);
+  };
 
+  const submitEdit = async (col: number, row: number, val: string) => {
     try {
       const res = await fetch(`${API_URL}/model/cell`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ col: selectedCell.col, row: selectedCell.row, input: formula })
+        body: JSON.stringify({ col, row, input: val })
       });
       const json = await res.json();
-      setData(json); // Update grid
-      setSelectedCell(null);
+      setData(json);
+      setEditingCell(null);
       setFormula('');
     } catch (e) {
       console.error(e);
     }
   };
-
-  // Filter Data Views
-  // We need to know which rows belong to which view.
-  // Ideally Backend sends structure, but we'll hack it by Row Index or Metric Name scan for now.
-  // 
-  // Products/Revenue: From Row 0 to '--- INCOME STATEMENT ---' (exclusive)
-  // Cash: Row 'Beginning Cash' to end?
-  // Balance Sheet: Row '--- BALANCE SHEET ---' to end?
-  // Income Statement: '--- INCOME STATEMENT ---' to '--- BALANCE SHEET ---'
 
   const getFilteredData = () => {
     if (data.length === 0) return [];
@@ -74,7 +84,6 @@ function App() {
     let startRow = 0;
     let endRow = data.length;
 
-    // Helper to find row index by content
     const findRow = (text: string) => data.findIndex(row => row[0] === text);
 
     const incomeHeader = findRow('--- INCOME STATEMENT ---');
@@ -83,18 +92,11 @@ function App() {
     if (activeTab === 'products') {
       endRow = incomeHeader > -1 ? incomeHeader : data.length;
     } else if (activeTab === 'cash') {
-      // Maybe Cash Flow section (Balance Sheet section actually contains Cash Flow in our model)
-      // Let's show Balance Sheet section
       startRow = bsHeader > -1 ? bsHeader : 0;
     } else if (activeTab === 'bs') {
       startRow = bsHeader > -1 ? bsHeader : 0;
     }
 
-    // Slice includes start, excludes end
-    // But slice needs to include headers for context?
-    // We'll just slice the data rows.
-    // If we slice, we lose the Header Row (Row 0: Metric, Month 1...).
-    // We should always prepend Row 0.
     const sliced = data.slice(startRow, endRow);
     const header = data[0];
     if (startRow > 0) return [header, ...sliced];
@@ -159,13 +161,29 @@ function App() {
         {loading ? (
           <div className="flex items-center justify-center h-full text-gray-400 animate-pulse">Loading Model...</div>
         ) : (
-          <div className="h-full flex flex-col bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            <DataGrid data={getFilteredData()} onCellClick={handleCellClick} />
-          </div>
+          <>
+            <div className="h-full flex flex-col bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+              <DataGrid
+                data={getFilteredData()}
+                onCellClick={handleCellClick}
+                onCellDoubleClick={handleCellDoubleClick}
+              />
+            </div>
+
+            {editingCell && (
+              <FormulaModal
+                isOpen={true}
+                onClose={() => setEditingCell(null)}
+                onSave={(val) => submitEdit(editingCell.col, editingCell.row, val)}
+                initialValue={editingCell.val}
+                availableNames={availableNames}
+              />
+            )}
+          </>
         )}
       </main>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

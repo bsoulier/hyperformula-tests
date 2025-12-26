@@ -19,4 +19,8 @@ export class AppController {
   updateCell(@Body() body: { col: number; row: number; input: string }) {
     return this.modelService.updateCell(body.col, body.row, body.input);
   }
+  @Get('model/names')
+  getNames() {
+    return this.modelService.getRegisteredNames();
+  }
 }

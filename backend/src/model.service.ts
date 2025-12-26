@@ -325,8 +325,9 @@ export class ModelService {
         return this.hf.getCellFormula({ sheet: this.sheetId, col, row });
     }
 
-    updateCell(col: number, row: number, input: string) {
+    updateCell(col: number, row: number, input: string | number) {
         let val: string | number = input;
+        const inputStr = String(input);
 
         // Store Source Formula
         if (typeof input === 'string' && input.startsWith('=')) {
@@ -337,11 +338,15 @@ export class ModelService {
             this.formulaMap.delete(this.getMapKey(col, row));
         }
 
-        if (!isNaN(Number(input)) && input.trim() !== '' && !input.startsWith('=')) {
-            val = Number(input);
+        if (!isNaN(Number(inputStr)) && inputStr.trim() !== '' && !inputStr.startsWith('=')) {
+            val = Number(inputStr);
         }
 
         this.hf.setCellContents({ sheet: this.sheetId, col, row }, [[val]]);
         return this.getAllValues();
+    }
+
+    getRegisteredNames(): string[] {
+        return Array.from(this.nameRowMap.keys());
     }
 }
