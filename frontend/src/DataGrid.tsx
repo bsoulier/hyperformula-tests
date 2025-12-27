@@ -4,12 +4,16 @@ interface DataGridProps {
     data: any[][];
     onCellClick: (col: number, row: number, val: any) => void;
     onCellDoubleClick: (col: number, row: number, val: any) => void;
+    selectedCell?: { col: number, row: number } | null;
+    changedCells?: Set<string>;
 }
 
 export const DataGrid: React.FC<DataGridProps> = ({
     data,
     onCellClick,
-    onCellDoubleClick
+    onCellDoubleClick,
+    selectedCell,
+    changedCells
 }) => {
     if (!data || data.length === 0) return <div className="p-4 text-gray-400">No Data</div>;
 
@@ -34,10 +38,17 @@ export const DataGrid: React.FC<DataGridProps> = ({
                             {row.map((cell, cIndex) => {
                                 // determine if this is a "header" column (col 0 usually)
                                 const isRowHeader = cIndex === 0;
+                                const isSelected = selectedCell?.col === cIndex && selectedCell?.row === rIndex + 1;
+                                const isChanged = changedCells?.has(`${cIndex},${rIndex + 1}`);
+
                                 return (
                                     <td
                                         key={cIndex}
-                                        className={`px-3 py-2 whitespace-nowrap text-sm border-r border-gray-100 last:border-r-0 cursor-pointer max-w-[150px] overflow-hidden text-ellipsis ${isRowHeader ? 'font-medium text-gray-900 bg-gray-50 max-w-[250px]' : 'text-gray-500'}`}
+                                        className={`px-3 py-2 whitespace-nowrap text-sm border-r border-gray-100 last:border-r-0 cursor-pointer max-w-[150px] overflow-hidden text-ellipsis transition-all duration-1000
+                                            ${isRowHeader ? 'font-medium text-gray-900 bg-gray-50 max-w-[250px]' : 'text-gray-500'}
+                                            ${isSelected ? 'ring-2 ring-blue-600 z-20 relative bg-blue-50' : ''}
+                                            ${!isSelected && isChanged ? 'bg-blue-300' : ''}
+                                        `}
                                         onClick={() => onCellClick(cIndex, rIndex + 1, cell)}
                                         onDoubleClick={() => onCellDoubleClick(cIndex, rIndex + 1, cell)}
                                     >

@@ -7,17 +7,57 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [selectedCell, setSelectedCell] = useState<{ col: number, row: number, val: any } | null>(null);
   const [formula, setFormula] = useState('');
-  const [activeTab, setActiveTab] = useState<'all' | 'products' | 'cash' | 'bs'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'products' | 'cash' | 'bs'>('products');
   const [editingCell, setEditingCell] = useState<{ col: number, row: number, val: string } | null>(null);
   const [availableNames, setAvailableNames] = useState<string[]>([]);
+  const [changedCells, setChangedCells] = useState<Set<string>>(new Set());
 
   const API_URL = 'http://localhost:3000/api';
+
+  useEffect(() => {
+    if (changedCells.size > 0) {
+      const timer = setTimeout(() => {
+        setChangedCells(new Set());
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [changedCells]);
+
+  const detectChanges = (newData: any[][]) => {
+    if (data.length === 0) return; // Don't highlight on first load
+    const changes = new Set<string>();
+
+    // We assume dimensions don't change drastically for this simple diff
+    newData.forEach((row, rIndex) => {
+      row.forEach((cell, cIndex) => {
+        const oldVal = data[rIndex]?.[cIndex];
+        // Simple equality check. 
+        // Note: Objects/Errors might need custom check, but strict equality covers most primitives
+        // For objects (message/value), we might need deeper check
+        let isDiff = oldVal !== cell;
+        if (typeof cell === 'object' && cell !== null && typeof oldVal === 'object' && oldVal !== null) {
+          isDiff = cell.value !== oldVal.value || cell.message !== oldVal.message;
+        }
+
+        if (isDiff) {
+          changes.add(`${cIndex},${rIndex + 1}`); // Store 1-based row for consistency with grid logic
+        }
+      });
+    });
+
+    if (changes.size > 0) {
+      setChangedCells(changes);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/model`);
       const json = await res.json();
+      // On re-fetch, maybe we want to diff? 
+      // If user just refreshed, we skip. But if triggered by something else?
+      // For now, fetchData is only called on mount, so it hits the data.length===0 check and skips.
       setData(json);
 
       const namesRes = await fetch(`${API_URL}/model/names`);
@@ -69,7 +109,10 @@ function App() {
         body: JSON.stringify({ col, row, input: val })
       });
       const json = await res.json();
+
+      detectChanges(json);
       setData(json);
+
       setEditingCell(null);
       setFormula('');
     } catch (e) {
@@ -167,6 +210,8 @@ function App() {
                 data={getFilteredData()}
                 onCellClick={handleCellClick}
                 onCellDoubleClick={handleCellDoubleClick}
+                selectedCell={selectedCell}
+                changedCells={changedCells}
               />
             </div>
 
