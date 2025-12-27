@@ -130,12 +130,14 @@ function App() {
     const findRow = (text: string) => data.findIndex(row => row[0] === text);
 
     const incomeHeader = findRow('--- INCOME STATEMENT ---');
+    const cashHeader = findRow('--- CASH FLOW ---');
     const bsHeader = findRow('--- BALANCE SHEET ---');
 
     if (activeTab === 'products') {
       endRow = incomeHeader > -1 ? incomeHeader : data.length;
     } else if (activeTab === 'cash') {
-      startRow = bsHeader > -1 ? bsHeader : 0;
+      startRow = cashHeader > -1 ? cashHeader : 0;
+      endRow = bsHeader > -1 ? bsHeader : data.length;
     } else if (activeTab === 'bs') {
       startRow = bsHeader > -1 ? bsHeader : 0;
     }

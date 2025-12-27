@@ -65,7 +65,7 @@ export class ModelService {
         });
 
         // 2. Standard Preprocessing (Internal Name -> Address)
-        return internalFormula.replace(/([A-Z_a-z][A-Z_a-z0-9]*)(?:\[\s*(-?\d+)\s*\])?/g, (match, name, offsetStr) => {
+        const finalFormula = internalFormula.replace(/([A-Z_a-z][A-Z_a-z0-9]*)(?:\[\s*(-?\d+)\s*\])?/g, (match, name, offsetStr) => {
             const upperName = name.toUpperCase();
             if (this.nameRowMap.has(upperName)) {
                 const targetRow = this.nameRowMap.get(upperName)!;
@@ -77,6 +77,8 @@ export class ModelService {
             }
             return match;
         });
+
+        return finalFormula;
     }
 
     private buildModel() {
@@ -242,18 +244,15 @@ export class ModelService {
 
         const totalHeadcoundRow = currentRow++;
         registerRow('Total Headcount', totalHeadcoundRow);
+        registerRow('Total Headcount', totalHeadcoundRow);
         // Sum new named ranges
-        const headcountFormulas = Array.from({ length: TOTAL_MONTHS }, (_, i) => {
-            // We can just sum them up. 
-            // Ideally we'd use a range like SUM(EMPLOYEE_START:EMPLOYEE_END) if they were contiguous, 
-            // but specific named ranges are safer here.
+        setRowFormulas(totalHeadcoundRow, (i) => {
             const parts = [];
             for (let k = 1; k <= EMPLOYEE_COUNT; k++) {
                 parts.push(`EMPLOYEE_${k}_ACTIVE`);
             }
             return `=${parts.join('+')}`;
         });
-        this.hf.setCellContents({ sheet: this.sheetId, row: totalHeadcoundRow, col: 1 }, [headcountFormulas]);
 
 
         // 5. Facilities
@@ -304,7 +303,7 @@ export class ModelService {
             }
             const paySum = salaries.join('+');
             const insSum = insurances.join('+');
-            return `(${paySum}) + (${insSum}) + OFFICE_RENT + VARIABLE_OFFICE_COSTS + MARKETING`;
+            return `=(${paySum}) + (${insSum}) + OFFICE_RENT + VARIABLE_OFFICE_COSTS + MARKETING`;
         });
 
         const ebitdaRow = currentRow++;
@@ -320,9 +319,9 @@ export class ModelService {
         setRowFormulas(netIncomeRow, () => '=EBITDA - CORPORATE_TAX');
 
 
-        // 7. Balance Sheet
+        // 7. Cash Flow
         currentRow++;
-        this.hf.setCellContents({ sheet: this.sheetId, row: currentRow, col: 0 }, [['--- BALANCE SHEET ---']]);
+        this.hf.setCellContents({ sheet: this.sheetId, row: currentRow, col: 0 }, [['--- CASH FLOW ---']]);
         currentRow++;
 
         const beginCashRow = currentRow++;
@@ -341,7 +340,7 @@ export class ModelService {
         const effectiveHighRow = currentRow++;
         registerRow('Effective Closing Cash', effectiveHighRow);
 
-        // Balance Sheet Logic
+        // Cash Flow Logic
         setRowFormulas(beginCashRow, (i) => {
             if (i === 0) return '=500000';
             // Prev Effective
@@ -355,6 +354,15 @@ export class ModelService {
         setRowFormulas(effectiveHighRow, () => {
             return '=IF(ISBLANK(MANUAL_OVERRIDE), ENDING_CASH_CALC, MANUAL_OVERRIDE)';
         });
+
+        // 8. Balance Sheet
+        currentRow++;
+        this.hf.setCellContents({ sheet: this.sheetId, row: currentRow, col: 0 }, [['--- BALANCE SHEET ---']]);
+        currentRow++;
+
+        const bsCashRow = currentRow++;
+        registerRow('Cash', bsCashRow);
+        setRowFormulas(bsCashRow, () => '=EFFECTIVE_CLOSING_CASH');
     }
 
     getAllValues() {
