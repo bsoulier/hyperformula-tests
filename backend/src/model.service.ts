@@ -7,6 +7,8 @@ export class ModelService {
     private sheetId: number;
     private nameRowMap: Map<string, number> = new Map();
     private formulaMap: Map<string, string> = new Map();
+    private internalToExternal: Map<string, string> = new Map();
+    private externalToInternal: Map<string, string> = new Map();
 
     constructor() {
         this.buildModel();
@@ -33,8 +35,37 @@ export class ModelService {
         return `${colLet}${row + 1}`;
     }
 
+    private getDisplayFormula(internalFormula: string): string {
+        // Replace Internal Names with Dot Notation for UI
+        return internalFormula.replace(/([A-Z_0-9]+)(?:\[\s*(-?\d+)\s*\])?/g, (match, name, offsetStr) => {
+            if (this.internalToExternal.has(name)) {
+                const extName = this.internalToExternal.get(name)!;
+                const offset = offsetStr ? `[${offsetStr}]` : '';
+                return `${extName}${offset}`;
+            }
+            return match;
+        });
+    }
+
     private preprocessFormula(formula: string, currentCol: number): string {
-        return formula.replace(/([A-Z_a-z][A-Z_a-z0-9]*)(?:\[\s*(-?\d+)\s*\])?/g, (match, name, offsetStr) => {
+        // 1. Convert Dot Notation -> Internal Name
+        // We match possible dot notation names (lowercase/mixed + dots)
+        // regex: [a-z0-9._]+ ?? simpler: match anything that maps
+        // But we need to be careful not to match standard functions if they look similar, 
+        // though standard functions usually don't have dots (except object access which HF doesn't do typical js style).
+        // Let's iterate our external names or use a precise regex?
+        // Better: Regex for word-ish things including dots.
+        let internalFormula = formula.replace(/([a-zA-Z0-9_\.]+)(?:\[\s*(-?\d+)\s*\])?/g, (match, name, offsetStr) => {
+            // Check if it's an external name
+            if (this.externalToInternal.has(name)) {
+                const intName = this.externalToInternal.get(name)!;
+                return `${intName}${offsetStr ? `[${offsetStr}]` : ''}`;
+            }
+            return match;
+        });
+
+        // 2. Standard Preprocessing (Internal Name -> Address)
+        return internalFormula.replace(/([A-Z_a-z][A-Z_a-z0-9]*)(?:\[\s*(-?\d+)\s*\])?/g, (match, name, offsetStr) => {
             const upperName = name.toUpperCase();
             if (this.nameRowMap.has(upperName)) {
                 const targetRow = this.nameRowMap.get(upperName)!;
@@ -60,15 +91,25 @@ export class ModelService {
         const sheetName = this.hf.addSheet(SHEET_NAME);
         this.sheetId = this.hf.getSheetId(sheetName)!;
         this.nameRowMap.clear();
+        this.internalToExternal.clear();
+        this.externalToInternal.clear();
 
         let currentRow = 1; // 0 is Headers
 
         // --- Helpers ---
         // 1. Register Name
-        const registerRow = (label: string, row: number, defaultVal: any[] | null = null) => {
-            // Safe name: New Customers -> NEW_CUSTOMERS
-            const safeName = label.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
+        const registerRow = (label: string, row: number, defaultVal: any[] | null = null, customInternalName?: string, customDisplayName?: string) => {
+            // Internal Name (SNAKE_CASE)
+            const safeName = customInternalName || label.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
             this.nameRowMap.set(safeName, row);
+
+            // External Name (dot.notation)
+            // If custom displayName not provided, transform label: 'New Customers' -> 'new.customers'
+            const extName = customDisplayName || label.toLowerCase().replace(/[^a-z0-9]+/g, '.');
+
+            this.internalToExternal.set(safeName, extName);
+            this.externalToInternal.set(extName, safeName);
+
 
             // Also register HF Named Expression for "Whole Row" usage (useful for SUMs)
             try {
@@ -171,44 +212,46 @@ export class ModelService {
             const startMonth = (i * 2) % 12 + 1;
             const salary = 5000 + ((i % 5) * 1000);
             const baseInsurance = 500;
+            const empId = i + 1;
 
             currentRow++;
-            this.hf.setCellContents({ sheet: this.sheetId, row: currentRow, col: 0 }, [[`Employee ${i + 1} (Starts M${startMonth})`]]);
+            this.hf.setCellContents({ sheet: this.sheetId, row: currentRow, col: 0 }, [[`Employee ${empId} (Starts M${startMonth})`]]);
 
+            // Active Row
             const statusRow = currentRow++;
-            // We won't register individual rows in map to avoid clutter, 
-            // but we could: EMPLOYEE_1_ACTIVE
             activeStatusRows.push(statusRow);
-            const statusFormulas = Array.from({ length: TOTAL_MONTHS }, (_, m) => (m + 1) >= startMonth ? '=1' : '=0');
-            this.hf.setCellContents({ sheet: this.sheetId, row: statusRow, col: 0 }, [['Active', ...statusFormulas]]);
+            registerRow(`Active (Emp ${empId})`, statusRow, null, `EMPLOYEE_${empId}_ACTIVE`, `employee.${empId}.active`);
+            setRowFormulas(statusRow, (m) => (m + 1) >= startMonth ? '=1' : '=0');
 
+            // Salary Row
             const salRow = currentRow++;
             salaryRows.push(salRow);
-            const salFormulas = Array.from({ length: TOTAL_MONTHS }, (_, m) => {
-                const col = this.numToChar(m + 1);
-                return `=${salary} * ${col}${statusRow + 1}`; // Keeping direct ref for internals
-            });
-            this.hf.setCellContents({ sheet: this.sheetId, row: salRow, col: 0 }, [['Salary', ...salFormulas]]);
+            registerRow(`Salary (Emp ${empId})`, salRow, null, `EMPLOYEE_${empId}_SALARY`, `employee.${empId}.salary`);
+            setRowFormulas(salRow, () => `=EMPLOYEE_${empId}_ACTIVE * ${salary}`);
 
+            // Insurance Row
             const insRow = currentRow++;
             insuranceRows.push(insRow);
-            const insFormulas = Array.from({ length: TOTAL_MONTHS }, (_, m) => {
-                const col = this.numToChar(m + 1);
+            registerRow(`Insurance (Emp ${empId})`, insRow, null, `EMPLOYEE_${empId}_INSURANCE`, `employee.${empId}.insurance`);
+            setRowFormulas(insRow, (m) => {
                 const yearIndex = Math.floor(m / 12);
                 const compound = Math.pow(1.05, yearIndex).toFixed(4);
-                // Direct ref
-                return `=${baseInsurance} * ${compound} * ${col}${statusRow + 1}`;
+                return `=${baseInsurance} * ${compound} * EMPLOYEE_${empId}_ACTIVE`;
             });
-            this.hf.setCellContents({ sheet: this.sheetId, row: insRow, col: 0 }, [['Insurance', ...insFormulas]]);
         }
 
         const totalHeadcoundRow = currentRow++;
         registerRow('Total Headcount', totalHeadcoundRow);
-        // Manual Sum for this one as it aggregates un-mapped rows
+        // Sum new named ranges
         const headcountFormulas = Array.from({ length: TOTAL_MONTHS }, (_, i) => {
-            const col = this.numToChar(i + 1);
-            const refs = activeStatusRows.map(r => `${col}${r + 1}`).join('+');
-            return `=${refs}`;
+            // We can just sum them up. 
+            // Ideally we'd use a range like SUM(EMPLOYEE_START:EMPLOYEE_END) if they were contiguous, 
+            // but specific named ranges are safer here.
+            const parts = [];
+            for (let k = 1; k <= EMPLOYEE_COUNT; k++) {
+                parts.push(`EMPLOYEE_${k}_ACTIVE`);
+            }
+            return `=${parts.join('+')}`;
         });
         this.hf.setCellContents({ sheet: this.sheetId, row: totalHeadcoundRow, col: 1 }, [headcountFormulas]);
 
@@ -252,13 +295,15 @@ export class ModelService {
 
         const opexRow = currentRow++;
         registerRow('Total OpEx', opexRow);
-        // Complex sum again: Payroll + Insurance + Rent + Var + Marketing
-        // We can use the registered names for Rent/Var/Market. 
-        // For Payroll/Insurance, same issue as Headcount.
         setRowFormulas(opexRow, (i) => {
-            const col = this.numToChar(i + 1);
-            const paySum = salaryRows.map(r => `${col}${r + 1}`).join('+');
-            const insSum = insuranceRows.map(r => `${col}${r + 1}`).join('+');
+            const salaries = [];
+            const insurances = [];
+            for (let k = 1; k <= EMPLOYEE_COUNT; k++) {
+                salaries.push(`EMPLOYEE_${k}_SALARY`);
+                insurances.push(`EMPLOYEE_${k}_INSURANCE`);
+            }
+            const paySum = salaries.join('+');
+            const insSum = insurances.join('+');
             return `(${paySum}) + (${insSum}) + OFFICE_RENT + VARIABLE_OFFICE_COSTS + MARKETING`;
         });
 
@@ -319,10 +364,14 @@ export class ModelService {
     getFormula(col: number, row: number) {
         // Return stored source formula if exists, else compiled one
         const key = this.getMapKey(col, row);
+        let formula = '';
         if (this.formulaMap.has(key)) {
-            return this.formulaMap.get(key);
+            formula = this.formulaMap.get(key)!;
+        } else {
+            formula = this.hf.getCellFormula({ sheet: this.sheetId, col, row }) || '';
         }
-        return this.hf.getCellFormula({ sheet: this.sheetId, col, row });
+        // Convert to Display Name
+        return this.getDisplayFormula(formula);
     }
 
     updateCell(col: number, row: number, input: string | number) {
@@ -331,7 +380,12 @@ export class ModelService {
 
         // Store Source Formula
         if (typeof input === 'string' && input.startsWith('=')) {
+            // Store the "External" formula in the map? Or Internal?
+            // Usually good to store exactly what user typed.
             this.formulaMap.set(this.getMapKey(col, row), input);
+
+            // Preprocess converts External -> Internal
+            // Then Internal -> Address
             val = this.preprocessFormula(input, col);
         } else {
             // If not a formula (value), remove from map so we don't show stale formula
@@ -347,6 +401,7 @@ export class ModelService {
     }
 
     getRegisteredNames(): string[] {
-        return Array.from(this.nameRowMap.keys());
+        // Return External Names
+        return Array.from(this.externalToInternal.keys());
     }
 }

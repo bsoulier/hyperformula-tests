@@ -21,11 +21,16 @@ export const FormulaModal: React.FC<FormulaModalProps> = ({ isOpen, onClose, onS
     useEffect(() => {
         // Simple Autocomplete Logic
         const textUpToCursor = value.slice(0, cursorPos);
-        const match = textUpToCursor.match(/([a-zA-Z_0-9]+)$/); // Match last word
+        // Include dots in match
+        const match = textUpToCursor.match(/([a-zA-Z_0-9\.]+)$/); // Match last word
         if (match) {
-            const word = match[1].toUpperCase();
+            const word = match[1];
             if (word.length > 0) {
-                const filtered = availableNames.filter(n => n.startsWith(word) && n !== word);
+                // Case insensitive matching
+                const lowerWord = word.toLowerCase();
+                const filtered = availableNames.filter(n =>
+                    n.toLowerCase().startsWith(lowerWord) && n !== word
+                );
                 setSuggestions(filtered);
                 return;
             }
@@ -41,7 +46,7 @@ export const FormulaModal: React.FC<FormulaModalProps> = ({ isOpen, onClose, onS
     const insertSuggestion = (suggestion: string) => {
         const textUpToCursor = value.slice(0, cursorPos);
         const textAfterCursor = value.slice(cursorPos);
-        const match = textUpToCursor.match(/([a-zA-Z_0-9]+)$/);
+        const match = textUpToCursor.match(/([a-zA-Z_0-9\.]+)$/);
 
         if (match) {
             const wordStart = match.index!;

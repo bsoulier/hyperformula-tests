@@ -22,7 +22,7 @@ export const DataGrid: React.FC<DataGridProps> = ({
                 <thead className="bg-gray-50 sticky top-0 z-10">
                     <tr>
                         {headers.map((h, i) => (
-                            <th key={i} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200 bg-gray-50 sticky top-0">
+                            <th key={i} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200 bg-gray-50 sticky top-0 max-w-[150px] overflow-hidden text-ellipsis">
                                 {h}
                             </th>
                         ))}
@@ -37,7 +37,7 @@ export const DataGrid: React.FC<DataGridProps> = ({
                                 return (
                                     <td
                                         key={cIndex}
-                                        className={`px-3 py-2 whitespace-nowrap text-sm border-r border-gray-100 last:border-r-0 cursor-pointer ${isRowHeader ? 'font-medium text-gray-900 bg-gray-50' : 'text-gray-500'}`}
+                                        className={`px-3 py-2 whitespace-nowrap text-sm border-r border-gray-100 last:border-r-0 cursor-pointer max-w-[150px] overflow-hidden text-ellipsis ${isRowHeader ? 'font-medium text-gray-900 bg-gray-50 max-w-[250px]' : 'text-gray-500'}`}
                                         onClick={() => onCellClick(cIndex, rIndex + 1, cell)}
                                         onDoubleClick={() => onCellDoubleClick(cIndex, rIndex + 1, cell)}
                                     >
